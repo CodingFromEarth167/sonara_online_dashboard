@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Sonara",
+      "hasCanvas": false,
+      "bodyTextLen": 1391,
+      "bodyTextHash": "0d0040c96cef41f4e3fda2465e8b045ba0b76124af1ae5ce5c3a39a8577758c7",
+      "bodyTextPrefix": "Sonara ACOUSTIC FIELD Field Log Lab 6 nodes 6 alerts / hr Listen",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Sonara",
+      "hasCanvas": false,
+      "bodyTextLen": 1361,
+      "bodyTextHash": "ec5cd3f3515f435b67904fe139fdb77efd1188b0cc8dc44d618e730dd7512955",
+      "bodyTextPrefix": "Sonara 6 live Field Log Lab Listen 24-HOUR NOISE HEATMAP Listen ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

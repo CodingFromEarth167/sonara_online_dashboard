@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sonara — Acoustic Noise Heatmap</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0d0c;
+      --surface: #141716;
+      --surface-2: #1c211f;
+      --fg: #eef1ef;
+      --muted: #8b938e;
+      --accent: #c5cdc8;
+      --accent-fg: #0b0d0c;
+      --quiet: #7eb6ab;
+      --heat: #d07a5e;
+      --border: rgba(238, 241, 239, 0.12);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2 { font-family: Newsreader, Georgia, serif; font-weight: 500; letter-spacing: -0.03em; }
+    button, [type="button"] { cursor: pointer; font: inherit; }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand { font-family: Newsreader, Georgia, serif; font-size: 28px; margin: 0; }
+    .sub { color: var(--muted); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; }
+    .listen {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 44px;
+      background: none;
+      color: var(--fg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0 14px;
+    }
+    .listen.on { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 16px;
+      padding: 24px;
+    }
+    .map {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at 18% 44%, #1a3a28 0 8%, transparent 9%),
+        radial-gradient(circle at 48% 16%, #243028 0 7%, transparent 8%),
+        radial-gradient(circle at 78% 22%, #163226 0 10%, transparent 11%),
+        radial-gradient(circle at 49% 52%, #2a2a28 0 6%, transparent 7%),
+        radial-gradient(circle at 22% 74%, #1e2c24 0 7%, transparent 8%),
+        radial-gradient(circle at 84% 78%, #12261c 0 11%, transparent 12%),
+        linear-gradient(160deg, #121c16, #0c1210 55%, #1a1814);
+      box-shadow: 0 0 0 1px var(--border);
+    }
+    .road-h, .road-v {
+      position: absolute;
+      background: #2a2e2c;
+      opacity: 0.7;
+    }
+    .road-h { left: 8%; right: 8%; height: 10px; top: 52%; }
+    .road-v { top: 10%; bottom: 10%; width: 10px; left: 48%; }
+    .blob, .node {
+      position: absolute;
+      transform: translate(-50%, -50%);
+    }
+    .blob {
+      border-radius: 50%;
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+    .node {
+      width: 44px;
+      height: 44px;
+      border: 0;
+      background: none;
+      display: grid;
+      place-items: center;
+    }
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--quiet);
+    }
+    .node.hot .dot { background: var(--heat); }
+    .node.sel .dot { outline: 2px solid var(--accent); outline-offset: 4px; }
+    .panel {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 0 0 1px var(--border);
+    }
+    .kicker { color: var(--muted); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; margin: 0 0 8px; }
+    .spl { font-family: Newsreader, Georgia, serif; font-size: 48px; margin: 8px 0 0; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .events { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow: auto; }
+    .events li {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(208, 122, 94, 0.2);
+      color: var(--heat);
+    }
+    .badge.quiet { background: rgba(126, 182, 171, 0.2); color: var(--quiet); }
+    .hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; margin-top: 12px; }
+    .hours span { height: 36px; border-radius: 2px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .ghost {
+      height: 40px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--fg);
+    }
+    @media (max-width: 840px) {
+      main { grid-template-columns: 1fr; padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <p class="brand">Sonara</p>
+      <p class="sub">Acoustic field heatmap</p>
+    </div>
+    <button class="listen" id="listenBtn" type="button">Listen with this device</button>
+  </header>
+
+  <main>
+    <section>
+      <p class="kicker">24-hour noise heatmap</p>
+      <h1>Listen to the neighborhood</h1>
+      <p class="muted">Six field nodes plus your browser mic. Spikes are flagged as engine roar, congestion, wildlife, or a sharp burst.</p>
+      <div class="map" id="map">
+        <div class="road-h"></div>
+        <div class="road-v"></div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <p class="kicker" id="stripLabel">Selected node · 24 hours</p>
+        <div class="hours" id="hours"></div>
+      </div>
+    </section>
+
+    <aside>
+      <div class="panel" id="detail"></div>
+      <div class="panel" style="margin-top:16px">
+        <p class="kicker">Anomaly log</p>
+        <ul class="events" id="log"></ul>
+        <div class="actions">
+          <button class="ghost" type="button" data-kind="engine">Replay roar</button>
+          <button class="ghost" type="button" data-kind="wildlife">Replay wildlife</button>
+          <button class="ghost" type="button" data-kind="impact">Replay burst</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const CALIBRATION = 94;
+    const THRESHOLD_DB = 12;
+    const KIND_LABEL = {
+      quiet: "Ambient",
+      traffic: "Traffic",
+      congestion: "Congestion",
+      engine: "Engine roar",
+      wildlife: "Wildlife",
+      impact: "Sharp burst",
+    };
+
+    const stations = [
+      { id: "school", name: "Oakridge School", place: "Drop-off loop", x: 18, y: 44, baseline: 44, live: 46, board: "MagicBit" },
+      { id: "transit", name: "Harbor Transit", place: "Bus plaza", x: 48, y: 16, baseline: 58, live: 61, board: "ESP32 DevKit" },
+      { id: "park", name: "Riverside Park", place: "Canopy edge", x: 78, y: 22, baseline: 36, live: 37, board: "MagicBit Tiny" },
+      { id: "intersection", name: "5th & Harbor", place: "Main crossing", x: 49, y: 52, baseline: 62, live: 66, board: "MagicBit Extension" },
+      { id: "library", name: "Willow Library", place: "Reading court", x: 22, y: 74, baseline: 38, live: 39, board: "MagicBit" },
+      { id: "creek", name: "Willow Creek", place: "Wildlife corridor", x: 84, y: 78, baseline: 34, live: 35, board: "MagicBit Tiny" },
+      { id: "live", name: "This device", place: "Browser microphone", x: 8, y: 12, baseline: 40, live: 40, board: "Web Audio", online: false },
+    ];
+
+    const hourHeat = {};
+    stations.forEach((s) => {
+      hourHeat[s.id] = Array.from({ length: 24 }, (_, h) => s.baseline + (h >= 7 && h <= 9 ? 12 : 0) + (h >= 16 && h <= 19 ? 10 : 0));
+    });
+
+    let selected = "intersection";
+    let events = [];
+    let listening = false;
+    let stopMic = null;
+
+    function analyzeSamples(samples, calibration = CALIBRATION) {
+      const n = samples.length || 1;
+      let sum = 0, peak = 0;
+      for (let i = 0; i < samples.length; i++) {
+        const x = samples[i];
+        sum += x;
+        const a = Math.abs(x);
+        if (a > peak) peak = a;
+      }
+      const mean = sum / n;
+      let ac = 0, crossings = 0, prev = samples[0] - mean;
+      for (let i = 0; i < samples.length; i++) {
+        const d = samples[i] - mean;
+        ac += d * d;
+        if ((prev >= 0 && d < 0) || (prev < 0 && d >= 0)) crossings += 1;
+        prev = d;
+      }
+      const rms = Math.sqrt(ac / n);
+      const zcr = crossings / n;
+      const dbfs = rms > 1e-8 ? 20 * Math.log10(rms) : -90;
+      const spl = Math.min(120, Math.max(18, dbfs + calibration));
+      return { rms, peak, zcr, dbfs, spl };
+    }
+
+    function classifyEvent(analysis, baseline, isAnomaly) {
+      if (!isAnomaly) {
+        if (analysis.spl < 48) return "quiet";
+        if (analysis.spl < 62) return "traffic";
+        return "congestion";
+      }
+      const peakRatio = analysis.rms > 1e-6 ? analysis.peak / analysis.rms : 0;
+      if (peakRatio > 2.6 && analysis.zcr > 0.12) return "impact";
+      if (analysis.zcr > 0.16 && analysis.spl < baseline + 22) return "wildlife";
+      if (analysis.zcr < 0.09) return "engine";
+      if (analysis.spl >= 72) return "congestion";
+      return "traffic";
+    }
+
+    function detectAnomaly(analysis, baseline, thresholdDb = THRESHOLD_DB) {
+      const delta = analysis.spl - baseline;
+      const isAnomaly = delta >= thresholdDb;
+      return { isAnomaly, delta, kind: classifyEvent(analysis, baseline, isAnomaly) };
+    }
+
+    function intensity(spl) {
+      return Math.min(1, Math.max(0, (spl - 32) / 60));
+    }
+
+    function pushEvent(stationId, spl, kind, delta) {
+      events.unshift({ stationId, spl, kind, delta, ts: Date.now() });
+      events = events.slice(0, 40);
+    }
+
+    function render() {
+      const map = document.getElementById("map");
+      map.querySelectorAll(".blob, .node").forEach((el) => el.remove());
+      stations.forEach((s) => {
+        const t = intensity(s.live);
+        const blob = document.createElement("div");
+        blob.className = "blob";
+        blob.style.left = s.x + "%";
+        blob.style.top = s.y + "%";
+        blob.style.width = 16 + t * 22 + "%";
+        blob.style.aspectRatio = "1";
+        blob.style.opacity = String(0.28 + t * 0.55);
+        blob.style.background = "radial-gradient(circle, rgba(208,122,94,0.75) 0%, rgba(126,182,171,0.35) 46%, transparent 72%)";
+        map.appendChild(blob);
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "node" + (s.live - s.baseline >= 10 ? " hot" : "") + (s.id === selected ? " sel" : "");
+        btn.style.left = s.x + "%";
+        btn.style.top = s.y + "%";
+        btn.setAttribute("aria-label", s.name + ", " + Math.round(s.live) + " decibels");
+        btn.innerHTML = '<span class="dot"></span>';
+        btn.onclick = () => { selected = s.id; render(); };
+        map.appendChild(btn);
+      });
+
+      const s = stations.find((n) => n.id === selected);
+      document.getElementById("detail").innerHTML =
+        '<p class="kicker">Selected node</p>' +
+        "<h2>" + s.name + "</h2>" +
+        '<p class="muted">' + s.place + " · " + s.board + "</p>" +
+        '<p class="spl">' + Math.round(s.live) + "</p>" +
+        '<p class="muted">dB SPL · GPIO 32 · MAX4466</p>';
+
+      document.getElementById("stripLabel").textContent = s.name + " · 24 hours";
+      const hours = document.getElementById("hours");
+      hours.innerHTML = "";
+      (hourHeat[s.id] || []).forEach((val, i) => {
+        const cell = document.createElement("span");
+        const t = intensity(i === new Date().getHours() ? s.live : val);
+        cell.style.background = "color-mix(in oklab, var(--heat) " + Math.round(t * 88) + "%, var(--quiet))";
+        cell.title = i + ":00 · " + Math.round(val) + " dB";
+        hours.appendChild(cell);
+      });
+
+      document.getElementById("log").innerHTML = events.map((e) => {
+        const st = stations.find((n) => n.id === e.stationId);
+        const mins = Math.max(0, Math.round((Date.now() - e.ts) / 60000));
+        const klass = e.kind === "wildlife" || e.kind === "quiet" ? "quiet" : "";
+        return "<li><span>" + st.name + "<br><span class='muted'>" + mins + " min ago</span></span>" +
+          "<span>" + Math.round(e.spl) + " dB<br><span class='badge " + klass + "'>" + KIND_LABEL[e.kind] + "</span></span></li>";
+      }).join("") || "<li class='muted'>No anomalies yet. Turn on Listen or replay a spike.</li>";
+    }
+
+    function tick() {
+      const hour = new Date().getHours();
+      stations.forEach((s) => {
+        if (s.id === "live" && listening) return;
+        if (s.id === "live") return;
+        const rush = (hour >= 7 && hour <= 9) || (hour >= 16 && hour <= 19);
+        const target = s.baseline + (rush ? 10 : 0) + (Math.random() * 4 - 2);
+        const spike = Math.random() < 0.06 ? target + 12 + Math.random() * 10 : target;
+        s.live = Math.max(22, Math.min(102, s.live * 0.8 + spike * 0.2));
+        hourHeat[s.id][hour] = s.live;
+        if (s.live - s.baseline >= THRESHOLD_DB && Math.random() < 0.35) {
+          const kind = detectAnomaly({ rms: 0.2, peak: 0.5, zcr: s.id === "creek" ? 0.2 : 0.06, spl: s.live }, s.baseline).kind;
+          pushEvent(s.id, s.live, kind === "quiet" ? "traffic" : kind, s.live - s.baseline);
+        }
+      });
+      render();
+    }
+
+    async function startMic() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+      const ctx = new AudioContext();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      const buffer = new Float32Array(analyser.fftSize);
+      const live = stations.find((s) => s.id === "live");
+      live.online = true;
+      let raf = 0, stopped = false;
+      const loop = () => {
+        if (stopped) return;
+        analyser.getFloatTimeDomainData(buffer);
+        const analysis = analyzeSamples(buffer);
+        const anomaly = detectAnomaly(analysis, live.baseline);
+        live.live = analysis.spl;
+        if (!anomaly.isAnomaly) live.baseline = live.baseline * 0.96 + analysis.spl * 0.04;
+        if (anomaly.isAnomaly) pushEvent("live", analysis.spl, anomaly.kind, anomaly.delta);
+        selected = "live";
+        render();
+        raf = requestAnimationFrame(loop);
+      };
+      raf = requestAnimationFrame(loop);
+      return () => {
+        stopped = true;
+        cancelAnimationFrame(raf);
+        stream.getTracks().forEach((t) => t.stop());
+        ctx.close();
+        live.online = false;
+      };
+    }
+
+    document.getElementById("listenBtn").onclick = async () => {
+      if (listening) {
+        if (stopMic) stopMic();
+        listening = false;
+        document.getElementById("listenBtn").classList.remove("on");
+        document.getElementById("listenBtn").textContent = "Listen with this device";
+        return;
+      }
+      try {
+        stopMic = await startMic();
+        listening = true;
+        document.getElementById("listenBtn").classList.add("on");
+        document.getElementById("listenBtn").textContent = "Listening… tap to stop";
+      } catch (err) {
+        alert("Microphone permission was blocked.");
+      }
+    };
+
+    document.querySelectorAll("[data-kind]").forEach((btn) => {
+      btn.onclick = () => {
+        const kind = btn.getAttribute("data-kind");
+        const spl = kind === "wildlife" ? 54 : kind === "impact" ? 86 : 82;
+        const s = stations.find((n) => n.id === selected) || stations[3];
+        s.live = spl;
+        pushEvent(s.id, spl, kind, 14);
+        render();
+      };
+    });
+
+    pushEvent("school", 78, "engine", 14);
+    pushEvent("creek", 54, "wildlife", 11);
+    pushEvent("intersection", 81, "congestion", 16);
+    render();
+    setInterval(tick, 1200);
+  </script>
+</body>
+</html>
